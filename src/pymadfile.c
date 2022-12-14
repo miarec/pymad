@@ -11,7 +11,7 @@
  * can be found at http://www.bsd-dk.dk/~elrond/audio/madlld/ and carries
  * the following copyright and license:
  *
- * The madlld program is © 2001 by Bertrand Petit, all rights reserved.
+ * The madlld program is (c) 2001 by Bertrand Petit, all rights reserved.
  * It is distributed under the terms of the license similar to the
  * Berkeley license reproduced below.
  *
@@ -53,7 +53,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 
 #include "madmodule.h"
 #include "pymadfile.h"
@@ -83,7 +82,6 @@
                 junk at beginning of MP3 file*/
 
 /* local helpers */
-static unsigned long calc_total_time(PyObject *);
 static int16_t madfixed_to_int16(mad_fixed_t);
 
 static PyMethodDef madfile_methods[] = {
@@ -93,13 +91,11 @@ static PyMethodDef madfile_methods[] = {
     {"samplerate", py_madfile_samplerate, METH_VARARGS, ""},
     {"bitrate", py_madfile_bitrate, METH_VARARGS, ""},
     {"emphasis", py_madfile_emphasis, METH_VARARGS, ""},
-    {"total_time", py_madfile_total_time, METH_VARARGS, ""},
     {"current_time", py_madfile_current_time, METH_VARARGS, ""},
-    {"seek_time", py_madfile_seek_time, METH_VARARGS, ""},
     {NULL, 0, 0, NULL}};
 
 PyTypeObject py_madfile_t = {
-    PyVarObject_HEAD_INIT(&PyType_Type, 0) "MadFile", /* tp_name */
+    PyVarObject_HEAD_INIT(NULL, 0) "MadFile", /* tp_name */
     sizeof(py_madfile),                               /* tp_basicsize */
     0,                                                /* tp_itemsize */
     (destructor)py_madfile_dealloc,                   /* tp_dealloc */
@@ -214,8 +210,6 @@ PyObject *py_madfile_new(PyObject *self, PyObject *args) {
    * data immediately available to the caller */
   py_madfile_read((PyObject *)mf, NULL);
 
-  mf->total_length = calc_total_time((PyObject *)mf);
-
   return (PyObject *)mf;
 }
 
@@ -242,71 +236,6 @@ static void py_madfile_dealloc(PyObject *self, PyObject *args) {
     PY_MADFILE(self)->fobject = NULL;
   }
   PyObject_DEL(self);
-}
-
-/* Calculates length of MP3 by stepping through the frames and summing up
- * the duration of each frame. */
-static unsigned long calc_total_time(PyObject *self) {
-  mad_timer_t timer;
-  struct xing xing;
-  struct stat buf;
-  unsigned long r;
-  PyObject *o;
-  int fnum;
-
-  xing_init(&xing);
-  xing_parse(&xing, PYMAD_STREAM(self).anc_ptr, PYMAD_STREAM(self).anc_bitlen);
-
-  if (xing.flags & XING_FRAMES) {
-    timer = PYMAD_FRAME(self).header.duration;
-    mad_timer_multiply(&timer, xing.frames);
-    r = mad_timer_count(timer, MAD_UNITS_MILLISECONDS);
-  } else {
-    o = PyObject_CallMethod(PY_MADFILE(self)->fobject, "fileno", NULL);
-    if (o == NULL) {
-      /* no fileno method is provided, probably not a file */
-      PyErr_Clear();
-      return -1;
-    }
-    fnum = PyInt_AsLong(o);
-    Py_DECREF(o);
-    r = fstat(fnum, &buf);
-
-    /* Figure out actual length of file by stepping through it.
-     * This is a stripped down version of how madplay does it. */
-    void *ptr = mmap(0, buf.st_size, PROT_READ, MAP_SHARED, fnum, 0);
-    if (!ptr) {
-      fprintf(stderr, "mmap failed, can't calculate length");
-      return -1;
-    }
-
-    mad_timer_t time = mad_timer_zero;
-    struct mad_stream stream;
-    struct mad_header header;
-
-    mad_stream_init(&stream);
-    mad_header_init(&header);
-
-    mad_stream_buffer(&stream, ptr, buf.st_size);
-
-    while (1) {
-      if (mad_header_decode(&header, &stream) == -1) {
-        if (MAD_RECOVERABLE(stream.error))
-          continue;
-        else
-          break;
-      }
-
-      mad_timer_add(&time, header.duration);
-    }
-
-    if (munmap(ptr, buf.st_size) == -1) {
-      return -1;
-    }
-
-    r = time.seconds * 1000;
-  }
-  return r;
 }
 
 /* convert the MAD fixed point format to a signed 16 bit int */
@@ -579,60 +508,8 @@ static PyObject *py_madfile_emphasis(PyObject *self, PyObject *args) {
   return PyInt_FromLong(PYMAD_FRAME(self).header.emphasis);
 }
 
-/* return the estimated playtime of the track, in milliseconds */
-static PyObject *py_madfile_total_time(PyObject *self, PyObject *args) {
-  return PyInt_FromLong(PY_MADFILE(self)->total_length);
-}
-
 /* return the current position in the track, in milliseconds */
 static PyObject *py_madfile_current_time(PyObject *self, PyObject *args) {
   return PyInt_FromLong(
       mad_timer_count(PYMAD_TIMER(self), MAD_UNITS_MILLISECONDS));
-}
-
-/* seek playback to the given position, in milliseconds, from the start
- * FIXME: this implementation is really evil -- amazing that it semi-works */
-static PyObject *py_madfile_seek_time(PyObject *self, PyObject *args) {
-  long pos, offset;
-  struct stat buf;
-  int r;
-  PyObject *o;
-  int fnum;
-
-  if (!PyArg_ParseTuple(args, "l", &pos) || pos < 0) {
-    PyErr_SetString(PyExc_TypeError, "invalid argument");
-    return NULL;
-  }
-
-  o = PyObject_CallMethod(PY_MADFILE(self)->fobject, "fileno", NULL);
-  if (o == NULL) {
-    PyErr_SetString(PyExc_IOError, "couldn't get fileno");
-    return NULL;
-  }
-  fnum = PyInt_AsLong(o);
-  Py_DECREF(o);
-
-  r = fstat(fnum, &buf);
-  if (r != 0) {
-    PyErr_SetString(PyExc_IOError, "couldn't stat file");
-    return NULL;
-  }
-
-  offset = ((double)pos / PY_MADFILE(self)->total_length) * buf.st_size;
-
-  o = PyObject_CallMethod(PY_MADFILE(self)->fobject, "seek", "l", offset);
-  if (o == NULL) {
-    /* most likely no seek method -- FIXME get better checking */
-    PyErr_SetString(PyExc_IOError, "couldn't seek file");
-    return NULL;
-  }
-  Py_DECREF(o);
-
-  mad_stream_init(&PYMAD_STREAM(self));
-  mad_frame_init(&PYMAD_FRAME(self));
-  mad_synth_init(&PYMAD_SYNTH(self));
-  mad_timer_reset(&PYMAD_TIMER(self));
-  mad_timer_set(&PYMAD_TIMER(self), 0, pos, 1000);
-
-  return Py_None;
 }

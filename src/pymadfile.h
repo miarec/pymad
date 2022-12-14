@@ -25,7 +25,6 @@ typedef struct {
   unsigned char *input_buffer;
   unsigned int bufsize;
   unsigned int framecount;
-  unsigned long total_length;
 } py_madfile; /* MadFile */
 
 /* Macros for accessing elements of the MadFile object, used internally. */
@@ -45,8 +44,6 @@ static PyObject *py_madfile_mode(PyObject *self, PyObject *args);
 static PyObject *py_madfile_samplerate(PyObject *self, PyObject *args);
 static PyObject *py_madfile_bitrate(PyObject *self, PyObject *args);
 static PyObject *py_madfile_emphasis(PyObject *self, PyObject *args);
-static PyObject *py_madfile_total_time(PyObject *self, PyObject *args);
 static PyObject *py_madfile_current_time(PyObject *self, PyObject *args);
-static PyObject *py_madfile_seek_time(PyObject *self, PyObject *args);
 
 #endif /* __PY_MADFILE_H__ */
