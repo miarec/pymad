@@ -1,19 +1,18 @@
 cmake_minimum_required(VERSION 3.12)
+# CMake version requirements:
+#  - 3.11+ is required for FetchContent module
+#  - 3.12+ is required for Python3 module
 
 if(NOT PYMAD_VERSION)
     message(FATAL_ERROR "PYMAD_VERSION is not set. Pass it -DPYMAD_VERSION=1.2.3 in a command line")
 endif()
 
-set(PYMAD_PYTHON_MODULE_NAME "mad" CACHE STRING "Name of the C extension module file")
+set(PYMAD_PYTHON_MODULE_NAME "pymad" CACHE STRING "Name of the C extension module file")
 
 if(WIN32)
     set(PYMAD_PYTHON_MODULE_EXT ".pyd" CACHE STRING "Extension of the C extension module file")
 else()
     set(PYMAD_PYTHON_MODULE_EXT ".so" CACHE STRING "Extension of the C extension module file")
-endif()
-
-if(NOT PYMAD_OUTPUT_FILE)
-    set(PYMAD_OUTPUT_FILE "mad")
 endif()
 
 project(pymad 
@@ -67,15 +66,49 @@ target_compile_options(${PROJECT_NAME}
         -DVERSION="${PROJECT_VERSION}"
 )
 
-
-# -----------------------------------------------------
-# "libmad" dependency
-# -----------------------------------------------------
-target_link_libraries(${PROJECT_NAME} PRIVATE mad)
-
 # On Windows, it is required to link to the Python libraries
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} ${Python3_LIBRARIES})
 endif()
+
+
+# -----------------------------------------------------
+# "libmad" dependency
+# -----------------------------------------------------
+option(PYMAD_USE_SYSTEM_LIBMAD "Link with libmad, which is installed in system, rather than downloading it from github" OFF)
+
+
+if(PYMAD_USE_SYSTEM_LIBMAD)
+    target_link_libraries(${PROJECT_NAME} PRIVATE mad)
+else()
+
+    set(PYMAD_LIBMAD_REPO_URL "https://github.com/miarec/libmad" CACHE STRING "Git repository URL, from where to fetch the libmad library")
+    set(PYMAD_LIBMAD_REPO_TAG "master" CACHE STRING "Git repository tag/branch to fetch the libmad project")
+
+    include(FetchContent)
+
+    FetchContent_Declare(
+        mad
+        GIT_REPOSITORY "${PYMAD_LIBMAD_REPO_URL}"
+        GIT_TAG "${PYMAD_LIBMAD_REPO_TAG}"
+    )
+    FetchContent_MakeAvailable(mad)
+
+
+    # FetchContent_GetProperties(libmad)
+    # if(NOT libmad_POPULATED)
+        # FetchContent_Populate(libmad)
+        # add_subdirectory(
+            # "${libmad_SOURCE_DIR}"
+            # "${libmad_BINARY_DIR}"
+        # )
+    # endif()
+
+    message(STATUS "mad_SOURCE_DIR=${mad_SOURCE_DIR}, mad_BINARY_DIR=${mad_BINARY_DIR}")
+
+    target_link_libraries(${PROJECT_NAME} PRIVATE mad)
+
+endif()
+
 
 # set(PYMAD_PYTHON_C_MODULE_NAME "_pymad" CACHE STRING "Name of the C extension module file")
