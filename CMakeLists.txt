@@ -4,6 +4,18 @@ if(NOT PYMAD_VERSION)
     message(FATAL_ERROR "PYMAD_VERSION is not set. Pass it -DPYMAD_VERSION=1.2.3 in a command line")
 endif()
 
+set(PYMAD_PYTHON_MODULE_NAME "mad" CACHE STRING "Name of the C extension module file")
+
+if(WIN32)
+    set(PYMAD_PYTHON_MODULE_EXT ".pyd" CACHE STRING "Extension of the C extension module file")
+else()
+    set(PYMAD_PYTHON_MODULE_EXT ".so" CACHE STRING "Extension of the C extension module file")
+endif()
+
+if(NOT PYMAD_OUTPUT_FILE)
+    set(PYMAD_OUTPUT_FILE "mad")
+endif()
+
 project(pymad 
     LANGUAGES C
     VERSION "${PYMAD_VERSION}"
@@ -38,9 +50,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     PREFIX ""
-    OUTPUT_NAME "mad"
+    OUTPUT_NAME "${PYMAD_PYTHON_MODULE_NAME}"
+    SUFFIX "${PYMAD_PYTHON_MODULE_EXT}"
     LINKER_LANGUAGE C
 )
+
 
 # Tell the compiler/linker where to find Python.h and library files
 set_target_properties(${PROJECT_NAME} PROPERTIES 
@@ -53,13 +67,6 @@ target_compile_options(${PROJECT_NAME}
         -DVERSION="${PROJECT_VERSION}"
 )
 
-if(WIN32)
-    set_target_properties(
-        ${PROJECT_NAME}
-        PROPERTIES
-        SUFFIX ".pyd"
-    )
-endif()
 
 # -----------------------------------------------------
 # "libmad" dependency

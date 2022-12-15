@@ -61,6 +61,8 @@ class CMakeBuild(build_ext):
             extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
             cfg = 'Debug' if _get_env_variable('PYMAD_DEBUG') == 'ON' else 'Release'
 
+            python_module_name, python_module_ext = os.path.splitext(os.path.basename(self.get_ext_fullpath(ext.name)))
+
             cmake_args = [
                 '-DCMAKE_BUILD_TYPE=%s' % cfg,
 
@@ -76,6 +78,9 @@ class CMakeBuild(build_ext):
                 # is launching the build, prevents possible mismatching if
                 # multiple versions of Python are installed
                 '-DPYTHON_VERSION={}'.format(python_version),
+
+                '-DPYMAD_PYTHON_MODULE_NAME={}'.format(python_module_name),
+                '-DPYMAD_PYTHON_MODULE_EXT={}'.format(python_module_ext),
 
                 '-DPYMAD_VERSION={}'.format(PYMAD_VERSION),
             ]
