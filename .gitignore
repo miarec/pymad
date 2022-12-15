@@ -1,10 +1,12 @@
 MANIFEST
 Setup
 setup.cfg
-dist
-build
+/dist
+/build
 .pybuild
 *.pyc
 *.so
 *.whl
 .pc
+/venv
+*.egg-info
